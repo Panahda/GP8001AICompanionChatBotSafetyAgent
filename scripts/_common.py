@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+RUNS = ROOT / "runs"   # everything the pipeline makes lives here (not in git)
+FULL = RUNS / "full"   # the real run: data/, models/, reports/ (config.yaml loads its models)
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

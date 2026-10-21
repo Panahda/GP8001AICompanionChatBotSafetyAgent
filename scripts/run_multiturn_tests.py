@@ -9,9 +9,10 @@ action after each user message, plus optional events (the user pressing a button
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import _common  # noqa: F401
-from _common import ROOT, read_jsonl
+from _common import FULL, ROOT, read_jsonl
 
 from safety.agent import SafetyAgent
 
@@ -21,6 +22,7 @@ def main():
     ap.add_argument("--config", default=str(ROOT / "config.yaml"))
     ap.add_argument("--provider", default=None, help="override llm.provider (e.g. mock)")
     ap.add_argument("--tests", default=str(ROOT / "data/multiturn_tests.jsonl"))
+    ap.add_argument("--out", default=str(FULL / "reports/multiturn_results.md"))
     args = ap.parse_args()
 
     agent = SafetyAgent.from_config(args.config, provider=args.provider)
@@ -57,8 +59,9 @@ def main():
     lines.append(f"{n_pass}/{n_check} checks passed")
     text = "\n".join(lines)
     print(text)
-    (ROOT / "reports").mkdir(exist_ok=True)
-    (ROOT / "reports/multiturn_results.md").write_text("```\n" + text + "\n```\n", encoding="utf-8")
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("```\n" + text + "\n```\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,10 @@
 !*.yml
 !*.md
 !requirements*.txt
+!*.html
+!*.bat
 !.gitignore
+!.gitattributes
 !.gitkeep
 
 # ...but never these, even when the file type is allowed above
@@ -21,14 +24,17 @@ __pycache__/
 .env
 *.env
 .streamlit/
+.vscode/
+.idea/
+
+# everything the pipeline makes: runs/full, runs/quick, runs/archive
+runs/
+
+# old output folders from before runs/ existed
+/models/
+/reports/
 data/raw/
 data/interim/
 data/processed/
 data/review/
-models/*/
-reports/*
-!reports/.gitkeep
-runs/
 README_old.md
-.vscode/
-.idea/

@@ -49,8 +49,9 @@ class SafetyAgent:
                     mode: Optional[str] = None) -> "SafetyAgent":
         """Build from config.yaml. `provider` / `mode` override the file (e.g. provider="mock")."""
         cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-        if provider:
+        if provider and provider != cfg.get("llm", {}).get("provider"):
             cfg.setdefault("llm", {})["provider"] = provider
+            cfg["llm"]["model"] = None  # the model in the file belongs to the other provider; use the default
         if mode:
             cfg["mode"] = mode
         root = Path(path).resolve().parent

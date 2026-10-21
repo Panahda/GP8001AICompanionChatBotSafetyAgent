@@ -1,7 +1,7 @@
 """Step 6 - temperature scaling + crisis thresholds, fitted on the VALIDATION set.
 
-    python scripts/calibrate.py --model-dir models/transformer
-    python scripts/calibrate.py --model-dir models/baseline
+    python scripts/calibrate.py --model-dir runs/full/models/transformer
+    python scripts/calibrate.py --model-dir runs/full/models/baseline
 
 1. Temperature T minimises validation negative log-likelihood (Guo et al., 2017),
    so probabilities mean what they say.

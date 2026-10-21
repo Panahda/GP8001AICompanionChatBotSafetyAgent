@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from collections import Counter, defaultdict
 
 import _common  # noqa: F401
 import numpy as np
-from _common import ROOT, read_jsonl, write_jsonl
+from _common import FULL, ROOT, read_jsonl, write_jsonl
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from safety.text import normalize_for_rules
@@ -40,13 +41,14 @@ def near_dup_mask(texts: list[str], thresh: float) -> list[bool]:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--inputs", nargs="+", default=[str(ROOT / "data/raw/synthetic_raw.jsonl")])
+    ap.add_argument("--inputs", nargs="+", default=[str(FULL / "data/raw/synthetic_raw.jsonl")])
     ap.add_argument("--include-seeds", action="store_true", help="add data/seeds.jsonl to the pool")
     ap.add_argument("--test", default=str(ROOT / "data/test_set.jsonl"))
-    ap.add_argument("--out", default=str(ROOT / "data/interim/clean.jsonl"))
+    ap.add_argument("--out", default=str(FULL / "data/interim/clean.jsonl"))
     ap.add_argument("--near-dup", type=float, default=0.90)
     ap.add_argument("--leak", type=float, default=0.80)
     ap.add_argument("--max-words", type=int, default=60)
+    ap.add_argument("--reports", default=str(FULL / "reports"), help="folder for cleaning_report.json")
     args = ap.parse_args()
 
     rows = []
@@ -103,8 +105,8 @@ def main():
     report = {"stats": dict(stats), "per_level": dict(Counter(r["level"] for r in clean)),
               "per_subtype": dict(Counter(r["subtype"] for r in clean)),
               "leaked_examples": [r["text"] for r in leaked[:20]]}
-    (ROOT / "reports").mkdir(exist_ok=True)
-    (ROOT / "reports/cleaning_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    Path(args.reports).mkdir(parents=True, exist_ok=True)
+    (Path(args.reports) / "cleaning_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(report["stats"], indent=2))
     print("per level:", report["per_level"])
 

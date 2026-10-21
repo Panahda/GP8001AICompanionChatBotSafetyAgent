@@ -197,3 +197,22 @@ def test_lmstudio_provider_against_fake_server():
         assert rf["type"] == "json_schema" and rf["json_schema"]["schema"]["required"][0] == "level"
     finally:
         srv.shutdown()
+
+
+def test_provider_override_drops_the_files_model(tmp_path, monkeypatch):
+    """config.yaml names a local LM Studio model; switching to openai must not send that name to OpenAI."""
+    import safety.agent as ag
+
+    seen = {}
+
+    def fake_get_provider(name, model=None, *args):
+        seen.update(name=name, model=model)
+        return MockProvider()
+
+    monkeypatch.setattr(ag, "get_provider", fake_get_provider)
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("mode: full\nllm: {provider: lmstudio, model: some-local-model}\n", encoding="utf-8")
+    SafetyAgent.from_config(cfg, provider="openai")
+    assert seen == {"name": "openai", "model": None}
+    SafetyAgent.from_config(cfg, provider="lmstudio")
+    assert seen == {"name": "lmstudio", "model": "some-local-model"}

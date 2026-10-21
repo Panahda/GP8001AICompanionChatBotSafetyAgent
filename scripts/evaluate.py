@@ -1,7 +1,7 @@
 """Step 7 - evaluate the safety agent on the team-written test set, with ablations.
 
-    python scripts/evaluate.py --model-dir models/transformer --llm-provider openai
-    python scripts/evaluate.py --model-dir models/baseline --llm-provider mock   # offline (full-mode numbers not meaningful)
+    python scripts/evaluate.py --model-dir runs/full/models/transformer --llm-provider openai
+    python scripts/evaluate.py --model-dir runs/full/models/baseline --llm-provider mock   # offline (full-mode numbers not meaningful)
 
 Modes compared (same test set):
     rules              keyword rules only (soft cues fail closed -> crisis)
@@ -27,7 +27,7 @@ from pathlib import Path
 
 import _common  # noqa: F401
 import numpy as np
-from _common import ROOT, read_jsonl, wilson_ci
+from _common import FULL, ROOT, read_jsonl, wilson_ci
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 from safety.agent import SafetyAgent
@@ -121,11 +121,11 @@ def plot_confusion(cm, title, path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--test", default=str(ROOT / "data/test_set.jsonl"))
-    ap.add_argument("--model-dir", default=str(ROOT / "models/transformer"))
+    ap.add_argument("--model-dir", default=str(FULL / "models/transformer"))
     ap.add_argument("--llm-provider", default="mock")
     ap.add_argument("--llm-model", default=None)
     ap.add_argument("--modes", default="rules,classifier,rules+classifier,rules+llm,full")
-    ap.add_argument("--out", default=str(ROOT / "reports"))
+    ap.add_argument("--out", default=str(FULL / "reports"))
     args = ap.parse_args()
 
     test_path = Path(args.test)

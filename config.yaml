@@ -3,8 +3,8 @@
 mode: full
 
 classifier:
-  model_dir: models/transformer   # fine-tuned DistilRoBERTa (preferred)
-  fallback_dir: models/baseline   # TF-IDF + logistic regression, used if the above is missing
+  model_dir: runs/full/models/transformer   # fine-tuned DistilRoBERTa (made by the full run)
+  fallback_dir: runs/full/models/baseline   # TF-IDF + logistic regression, used if the above is missing
 
 llm:
   provider: lmstudio     # openai | gemini | lmstudio | mock   (keys: OPENAI_API_KEY / GEMINI_API_KEY)

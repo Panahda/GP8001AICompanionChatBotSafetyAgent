@@ -6,9 +6,9 @@
     python scripts/run_flow.py --mode full --start-at transformer   # resume a full run from a step
 
 quick  5 messages per label + the 126 seeds, relabel check on 20 items, 32 test messages.
-       runs/quick/ is wiped at every start. Its numbers only show that the flow works.
-full   every step at full size, in the normal folders. Generation resumes where it stopped.
-       It pauses when you need to act (switch models in LM Studio, review data/review/to_review.csv,
+       Writes only to runs/quick/, which is wiped at every start. Its numbers only show that the flow works.
+full   every step at full size, written to runs/full/. Generation resumes where it stopped.
+       It pauses when you need to act (switch models in LM Studio, review runs/full/data/review/to_review.csv,
        free GPU memory before training). Before it overwrites trained models, reports or the
        review sheet, it copies the old ones to runs/archive/<date-time>/.
 
@@ -30,11 +30,11 @@ from datetime import datetime
 
 import _common  # noqa: F401
 import yaml
-from _common import ROOT, read_jsonl, write_jsonl
+from _common import FULL, ROOT, RUNS, read_jsonl, write_jsonl
 
 PY = sys.executable
-QUICK = ROOT / "runs" / "quick"
-ARCHIVE = ROOT / "runs" / "archive"
+QUICK = RUNS / "quick"     # same layout as runs/full/, tiny data
+ARCHIVE = RUNS / "archive"
 FULL_STEPS = ["generate", "clean", "relabel", "review", "split", "baseline", "transformer", "evaluate", "multiturn"]
 
 
@@ -68,6 +68,31 @@ class Flow:
         for n, title, status, dt in self.log:
             print(f"  {n:>2}. {title:<42} {status:<18} {dt:6.0f}s")
         print(f"  total {sum(r[3] for r in self.log) / 60:.1f} min")
+
+
+# ---------------------------------------------------------------------------- version check
+# Options run_flow.py passes to the other scripts. An older copy of a script lacks them.
+REQUIRED_OPTIONS = {
+    "generate_synthetic.py": ["--calls-per-subtype", "--items-per-call", "--timeout"],
+    "clean_dedup.py": ["--reports"],
+    "relabel_check.py": ["--review-dir", "--reports", "--timeout"],
+    "run_multiturn_tests.py": ["--out"],
+    "split.py": ["--outdir"],
+    "evaluate.py": ["--llm-model"],
+}
+
+
+def check_scripts():
+    stale = []
+    for name, opts in REQUIRED_OPTIONS.items():
+        path = ROOT / "scripts" / name
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
+        missing = [o for o in opts if f'"{o}"' not in text]
+        if missing:
+            stale.append(f"  scripts/{name} (missing {', '.join(missing)})")
+    if stale:
+        sys.exit("These scripts are older versions than run_flow.py needs:\n" + "\n".join(stale) +
+                 "\nReplace the whole scripts folder with the latest one, then run again.")
 
 
 # ---------------------------------------------------------------------------- LM Studio helpers
@@ -131,11 +156,12 @@ def run_quick(args, cfg):
     if QUICK.exists():
         shutil.rmtree(QUICK)
     (QUICK / "reports").mkdir(parents=True)
+    qd = QUICK / "data"
     test_src, test = sample_test(args.test_per_level)
-    write_jsonl(QUICK / "test_quick.jsonl", test)
+    write_jsonl(qd / "test_quick.jsonl", test)
     print(f"Quick run. Outputs go to {QUICK}. Test set: {len(test)} messages sampled from data/{test_src}")
 
-    raw = QUICK / "raw.jsonl"
+    raw = qd / "raw/synthetic_raw.jsonl"
     if args.no_generate or args.provider == "mock":
         print("\n(generation skipped: training on the 126 seed examples only)")
     else:
@@ -147,12 +173,12 @@ def run_quick(args, cfg):
 
     inputs = ["--inputs", raw, "--include-seeds"] if raw.exists() else ["--inputs", ROOT / "data/seeds.jsonl"]
     flow.run("clean and de-duplicate", "clean_dedup.py",
-             [*inputs, "--test", QUICK / "test_quick.jsonl", "--out", QUICK / "clean.jsonl", "--reports", QUICK / "reports"])
+             [*inputs, "--test", qd / "test_quick.jsonl", "--out", qd / "interim/clean.jsonl", "--reports", QUICK / "reports"])
     flow.run(f"relabel check ({args.relabel_sample} items)", "relabel_check.py",
-             ["--provider", args.provider, *margs, "--inp", QUICK / "clean.jsonl", "--out", QUICK / "relabeled_sample.jsonl",
-              "--sample", args.relabel_sample, "--workers", 1, "--review-dir", QUICK / "review", "--reports", QUICK / "reports"])
-    flow.run("split train / validation", "split.py", ["--inp", QUICK / "clean.jsonl", "--outdir", QUICK / "processed"])
-    tv = ["--train", QUICK / "processed/train.jsonl", "--val", QUICK / "processed/val.jsonl"]
+             ["--provider", args.provider, *margs, "--inp", qd / "interim/clean.jsonl", "--out", qd / "interim/relabeled_sample.jsonl",
+              "--sample", args.relabel_sample, "--workers", 1, "--review-dir", qd / "review", "--reports", QUICK / "reports"])
+    flow.run("split train / validation", "split.py", ["--inp", qd / "interim/clean.jsonl", "--outdir", qd / "processed"])
+    tv = ["--train", qd / "processed/train.jsonl", "--val", qd / "processed/val.jsonl"]
     flow.run("train TF-IDF baseline", "train_baseline.py", [*tv, "--out", QUICK / "models/baseline"])
     flow.run("calibrate baseline", "calibrate.py", ["--model-dir", QUICK / "models/baseline"])
     model_dir = QUICK / "models/baseline"
@@ -168,7 +194,7 @@ def run_quick(args, cfg):
             ensure_lmstudio(flow, model, "model")
 
     flow.run("evaluate on the quick test set", "evaluate.py",
-             ["--test", QUICK / "test_quick.jsonl", "--model-dir", model_dir, "--llm-provider", args.provider,
+             ["--test", qd / "test_quick.jsonl", "--model-dir", model_dir, "--llm-provider", args.provider,
               *(["--llm-model", model] if model else []), "--out", QUICK / "reports"])
 
     qcfg = dict(cfg)
@@ -189,7 +215,7 @@ def archive_outputs():
     dest = ARCHIVE / datetime.now().strftime("%Y%m%d-%H%M%S")
     copied = []
     for rel in ("models", "reports", "data/review"):
-        src = ROOT / rel
+        src = FULL / rel
         if src.exists() and any(p.name != ".gitkeep" for p in src.iterdir()):
             shutil.copytree(src, dest / rel, ignore=shutil.ignore_patterns(".gitkeep"))
             copied.append(rel)
@@ -206,7 +232,7 @@ def run_full(args, cfg):
         sys.exit("Full mode needs a real model (lmstudio, openai or gemini). Use --mode quick --provider mock to test plumbing.")
 
     print("Full run. Steps: " + " -> ".join(steps))
-    print("Outputs go to data/, models/ and reports/ (the folders the demo and the slides use).")
+    print(f"Outputs go to {FULL} (data/, models/, reports/: the folder the demo and the slides use).")
     if not (ROOT / "data/test_set.jsonl").exists():
         print("note: data/test_set.jsonl not found, so the draft test set will be used. "
               "Final numbers must come from the team's rewritten test set.")
@@ -239,7 +265,7 @@ def run_full(args, cfg):
         flow.run("relabel check with model B", "relabel_check.py",
                  ["--provider", P, *(["--model", relabel_model] if relabel_model else []), "--workers", 2])
     if "review" in steps:
-        sheet = ROOT / "data/review/to_review.csv"
+        sheet = FULL / "data/review/to_review.csv"
         if sheet.exists():
             flow.pause(f"Open {sheet} in Excel. Fill the final_level column (0-3, or 'drop'), "
                        "save as 'CSV UTF-8', and close Excel. Rows left blank keep their label.")
@@ -250,17 +276,17 @@ def run_full(args, cfg):
         flow.run("split train / validation", "split.py", [])
     if "baseline" in steps:
         flow.run("train TF-IDF baseline", "train_baseline.py", [])
-        flow.run("calibrate baseline", "calibrate.py", ["--model-dir", ROOT / "models/baseline"])
+        flow.run("calibrate baseline", "calibrate.py", ["--model-dir", FULL / "models/baseline"])
     if "transformer" in steps:
         if lm:
             flow.pause("LM Studio: eject all models so training can use the GPU memory.")
         flow.run("train DistilRoBERTa", "train_transformer.py", [])
-        flow.run("calibrate DistilRoBERTa", "calibrate.py", ["--model-dir", ROOT / "models/transformer"])
+        flow.run("calibrate DistilRoBERTa", "calibrate.py", ["--model-dir", FULL / "models/transformer"])
     if "evaluate" in steps:
         if lm:
             flow.pause(f"LM Studio: load model A ({model or 'the safety-check model'}) and turn on the server.")
             model = ensure_lmstudio(flow, model, "model A")
-        mdir = ROOT / ("models/transformer" if (ROOT / "models/transformer/meta.json").exists() else "models/baseline")
+        mdir = FULL / ("models/transformer" if (FULL / "models/transformer/meta.json").exists() else "models/baseline")
         flow.run("evaluate on the test set", "evaluate.py",
                  ["--model-dir", mdir, "--llm-provider", P, *(["--llm-model", model] if model else [])])
     if "multiturn" in steps:
@@ -268,7 +294,7 @@ def run_full(args, cfg):
 
     flow.summary()
     if "evaluate" in steps:
-        print_results(ROOT / "reports")
+        print_results(FULL / "reports")
 
 
 def print_results(reports):
@@ -308,11 +334,12 @@ def main():
     if not args.mode:
         print("Which run?\n"
               "  1  quick : tiny data, checks every step in minutes; writes only to runs/quick\n"
-              "  2  full  : the real run, can take hours; writes to data/, models/, reports/")
+              "  2  full  : the real run, can take hours; writes to runs/full")
         args.mode = {"1": "quick", "2": "full", "quick": "quick", "full": "full"}.get(input("Type 1 or 2: ").strip().lower())
         if not args.mode:
             sys.exit("No mode chosen.")
 
+    check_scripts()
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     (run_quick if args.mode == "quick" else run_full)(args, cfg)
 

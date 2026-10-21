@@ -13,7 +13,7 @@ import re
 from collections import Counter, defaultdict
 
 import _common  # noqa: F401
-from _common import ROOT, read_jsonl, write_jsonl
+from _common import FULL, ROOT, read_jsonl, write_jsonl
 
 
 def noisy(text: str, rng: random.Random) -> str:
@@ -33,8 +33,8 @@ def noisy(text: str, rng: random.Random) -> str:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--inp", default=str(ROOT / "data/interim/relabeled.jsonl"))
-    ap.add_argument("--outdir", default=str(ROOT / "data/processed"))
+    ap.add_argument("--inp", default=str(FULL / "data/interim/relabeled.jsonl"))
+    ap.add_argument("--outdir", default=str(FULL / "data/processed"))
     ap.add_argument("--val-frac", type=float, default=0.15)
     ap.add_argument("--augment-rate", type=float, default=0.15)
     ap.add_argument("--seed", type=int, default=42)

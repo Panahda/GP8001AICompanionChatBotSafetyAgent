@@ -7,7 +7,7 @@ Input  = (user message, "[scenario] previous companion line") as a sentence pair
 Loss   = class-weighted cross-entropy; the crisis class gets an extra weight
          (--crisis-weight) because a missed crisis costs more than a false alarm.
 Select = best epoch by (validation macro-F1 + crisis recall).
-Output = models/transformer/{model files, tokenizer, meta.json, val_logits.npy, val_labels.npy, train_log.json}
+Output = runs/full/models/transformer/{model files, tokenizer, meta.json, val_logits.npy, val_labels.npy, train_log.json}
 
 Rough cost with ~3,000 training messages, 4 epochs, max_len 128:
   NVIDIA GPU / Colab T4: a few minutes.   CPU only: roughly 20-40 minutes.
@@ -22,7 +22,7 @@ from pathlib import Path
 import _common  # noqa: F401
 import numpy as np
 import torch
-from _common import ROOT, read_jsonl, set_seed
+from _common import FULL, ROOT, read_jsonl, set_seed
 from sklearn.metrics import f1_score, recall_score
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, get_linear_schedule_with_warmup
@@ -68,9 +68,9 @@ def predict_logits(model, loader, device):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="distilroberta-base")
-    ap.add_argument("--train", default=str(ROOT / "data/processed/train.jsonl"))
-    ap.add_argument("--val", default=str(ROOT / "data/processed/val.jsonl"))
-    ap.add_argument("--out", default=str(ROOT / "models/transformer"))
+    ap.add_argument("--train", default=str(FULL / "data/processed/train.jsonl"))
+    ap.add_argument("--val", default=str(FULL / "data/processed/val.jsonl"))
+    ap.add_argument("--out", default=str(FULL / "models/transformer"))
     ap.add_argument("--epochs", type=int, default=4)
     ap.add_argument("--lr", type=float, default=2e-5)
     ap.add_argument("--batch", type=int, default=16)

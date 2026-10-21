@@ -14,7 +14,7 @@ from pathlib import Path
 import _common  # noqa: F401
 import joblib
 import numpy as np
-from _common import ROOT, read_jsonl
+from _common import FULL, ROOT, read_jsonl
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, recall_score
 from sklearn.pipeline import FeatureUnion, Pipeline
@@ -34,9 +34,9 @@ def make_pipe(C: float) -> Pipeline:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--train", default=str(ROOT / "data/processed/train.jsonl"))
-    ap.add_argument("--val", default=str(ROOT / "data/processed/val.jsonl"))
-    ap.add_argument("--out", default=str(ROOT / "models/baseline"))
+    ap.add_argument("--train", default=str(FULL / "data/processed/train.jsonl"))
+    ap.add_argument("--val", default=str(FULL / "data/processed/val.jsonl"))
+    ap.add_argument("--out", default=str(FULL / "models/baseline"))
     args = ap.parse_args()
 
     tr, va = read_jsonl(args.train), read_jsonl(args.val)

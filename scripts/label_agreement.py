@@ -5,7 +5,7 @@ Two team members label the same draft independently (a CSV with columns id,level
     python scripts/label_agreement.py annot_siming.csv annot_jeff.csv
 
 Prints Cohen's kappa (plain and quadratic-weighted) and writes the disagreements
-to data/review/test_disagreements.csv so the pair can settle a final label together.
+to runs/full/data/review/test_disagreements.csv so the pair can settle a final label together.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import argparse
 import csv
 
 import _common  # noqa: F401
-from _common import ROOT, read_jsonl
+from _common import FULL, ROOT, read_jsonl
 from sklearn.metrics import cohen_kappa_score
 
 
@@ -36,7 +36,7 @@ def main():
     print(f"Cohen's kappa:            {cohen_kappa_score(a, b):.3f}")
     print(f"quadratic-weighted kappa: {cohen_kappa_score(a, b, weights='quadratic'):.3f}")
     text = {r["id"]: r["text"] for r in read_jsonl(args.draft)}
-    out = ROOT / "data/review/test_disagreements.csv"
+    out = FULL / "data/review/test_disagreements.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)

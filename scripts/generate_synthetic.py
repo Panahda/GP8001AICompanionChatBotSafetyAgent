@@ -21,7 +21,7 @@ from pathlib import Path
 
 import _common  # noqa: F401  (sets sys.path)
 import yaml
-from _common import ROOT, append_jsonl, read_jsonl
+from _common import FULL, ROOT, append_jsonl, read_jsonl
 
 from safety.llm_providers import get_provider
 
@@ -82,7 +82,7 @@ def load_taxonomy():
     return out
 
 
-def build_calls(matrix, tax, seeds, only=None, rng=None):
+def build_calls(matrix, tax, seeds, only=None, rng=None, per_subtype=None):
     rng = rng or random.Random(0)
     n = matrix["items_per_call"]
     personas = matrix["personas"]
@@ -91,7 +91,8 @@ def build_calls(matrix, tax, seeds, only=None, rng=None):
         if only and st not in only:
             continue
         pool = [s for s in seeds if s["subtype"] == st]
-        for k in range(math.ceil(spec["target"] / n)):
+        n_calls = math.ceil(spec["target"] / n)
+        for k in range(min(n_calls, per_subtype) if per_subtype else n_calls):
             scen = spec["scenarios"][k % len(spec["scenarios"])]
             persona = personas[(k * 7 + len(st)) % len(personas)]
             ex = rng.sample(pool, min(4, len(pool)))
@@ -112,9 +113,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--provider", default="openai")
     ap.add_argument("--model", default=None)
-    ap.add_argument("--out", default=str(ROOT / "data/raw/synthetic_raw.jsonl"))
+    ap.add_argument("--out", default=str(FULL / "data/raw/synthetic_raw.jsonl"))
     ap.add_argument("--only", nargs="*", help="subtypes to generate")
     ap.add_argument("--max-calls", type=int, default=None)
+    ap.add_argument("--calls-per-subtype", type=int, default=None,
+                    help="cap calls per subtype (1 = one small batch of every label, for a quick end-to-end run)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--seed", type=int, default=13)
     ap.add_argument("--timeout", type=float, default=None,
@@ -128,7 +131,7 @@ def main():
         matrix["items_per_call"] = args.items_per_call
     tax = load_taxonomy()
     seeds = read_jsonl(ROOT / "data/seeds.jsonl")
-    calls = build_calls(matrix, tax, seeds, args.only, random.Random(args.seed))
+    calls = build_calls(matrix, tax, seeds, args.only, random.Random(args.seed), args.calls_per_subtype)
     if args.max_calls:
         calls = calls[: args.max_calls]
 
