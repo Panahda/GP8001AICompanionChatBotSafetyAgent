@@ -1,0 +1,43 @@
+# Synthetic training data plan (scripts/generate_synthetic.py).
+# Each LLM call writes `items_per_call` messages for one (subtype, scenario, persona) cell.
+# Targets are BEFORE cleaning; expect ~15-25% to be removed by dedup, filters and relabel checks.
+items_per_call: 20
+temperature: 1.0
+
+scenarios:
+  hawker_centre: "ordering food and drinks at a Singapore hawker centre stall"
+  new_colleague: "small talk with a new colleague at work"
+  job_interview: "a practice job interview"
+  free_chat: "open chat with the companion, no role-play"
+
+personas:
+  - {id: teen_casual,   age_group: teen,  style: "teenager, lowercase, short, little punctuation, school words (sec 3, CCA, exams)"}
+  - {id: teen_singlish, age_group: teen,  style: "teenager, Singapore English with light particles (lah, leh, sia, can or not), casual"}
+  - {id: adult_formal,  age_group: adult, style: "adult, complete sentences, formal and very literal"}
+  - {id: adult_detail,  age_group: adult, style: "adult, long and detailed sentences with exact facts and numbers"}
+  - {id: any_typos,     age_group: any,   style: "typing fast on a phone: typos, missing words, no capital letters"}
+  - {id: any_blunt,     age_group: any,   style: "very direct and blunt, no greetings, no softening words"}
+
+# subtype: level, target count, what to write. Crisis subtypes are spread across all scenarios
+# because distress can appear in the middle of a role-play.
+subtypes:
+  ordinary_scenario:    {level: 0, target: 420, scenarios: [hawker_centre, new_colleague, job_interview, free_chat]}
+  blunt_literal:        {level: 0, target: 320, scenarios: [hawker_centre, new_colleague, job_interview, free_chat]}
+  idiom_negative:       {level: 0, target: 280, scenarios: [hawker_centre, new_colleague, job_interview, free_chat]}
+  meta_feedback:        {level: 0, target: 160, scenarios: [free_chat, hawker_centre, job_interview]}
+  special_interest:     {level: 0, target: 160, scenarios: [free_chat, new_colleague, job_interview]}
+  tense_explicit:       {level: 1, target: 300, scenarios: [hawker_centre, new_colleague, job_interview, free_chat]}
+  tense_hesitant:       {level: 1, target: 300, scenarios: [hawker_centre, new_colleague, job_interview, free_chat]}
+  overwhelmed_overload: {level: 2, target: 300, scenarios: [hawker_centre, new_colleague, job_interview, free_chat]}
+  overwhelmed_shutdown: {level: 2, target: 300, scenarios: [hawker_centre, new_colleague, job_interview, free_chat]}
+  cssrs_1_wish_dead:    {level: 3, target: 140, scenarios: [free_chat, new_colleague, job_interview, hawker_centre]}
+  cssrs_2_active_thoughts: {level: 3, target: 140, scenarios: [free_chat, new_colleague, job_interview, hawker_centre]}
+  cssrs_3_method:       {level: 3, target: 60,  scenarios: [free_chat, new_colleague]}
+  cssrs_4_intent:       {level: 3, target: 60,  scenarios: [free_chat, new_colleague]}
+  cssrs_5_plan:         {level: 3, target: 60,  scenarios: [free_chat, new_colleague]}
+  cssrs_6_behaviour:    {level: 3, target: 80,  scenarios: [free_chat, new_colleague, job_interview]}
+  nssi:                 {level: 3, target: 120, scenarios: [free_chat, new_colleague, job_interview, hawker_centre]}
+  harm_others:          {level: 3, target: 60,  scenarios: [free_chat, new_colleague]}
+  others_at_risk:       {level: 3, target: 60,  scenarios: [free_chat, new_colleague]}
+  unsafe_abuse:         {level: 3, target: 60,  scenarios: [free_chat, new_colleague]}
+# Totals before cleaning: level 0 = 1340, level 1 = 600, level 2 = 600, level 3 = 840  (3380)

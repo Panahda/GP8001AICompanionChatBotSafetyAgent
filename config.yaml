@@ -1,0 +1,24 @@
+# CompanionAI safety agent configuration.
+# mode: rules | classifier | rules+classifier | rules+llm | full
+mode: full
+
+classifier:
+  model_dir: models/transformer   # fine-tuned DistilRoBERTa (preferred)
+  fallback_dir: models/baseline   # TF-IDF + logistic regression, used if the above is missing
+
+llm:
+  provider: lmstudio     # openai | gemini | lmstudio | mock   (keys: OPENAI_API_KEY / GEMINI_API_KEY)
+  model: qwen/qwen3.8-27b         # null = provider default; for lmstudio = the model id shown in LM Studio
+  timeout_s: 10        # lmstudio uses at least 60 (local models are slower)
+  base_url: null       # lmstudio only; null = http://localhost:1234/v1
+
+# If a message carries a risk signal and the LLM cannot be reached, treat it as a crisis.
+fail_safe: true
+
+state:
+  baseline_window: 10
+  min_baseline_turns: 3
+  min_baseline_words: 6
+  short_ratio: 0.35
+  short_drop_needed: 2
+  calm_turns_to_deescalate: 2

@@ -1,0 +1,41 @@
+# Self-regulation playbook (Level 2). One prompt is offered at a time and the
+# prompts rotate within a session. Plain, literal language; the user always has a
+# way to stop. These are practice-tool prompts, not therapy.
+level2_prompts:
+  - id: slow_breathing
+    text: |-
+      Let's pause the practice. You did nothing wrong.
+      Would you like to try slow breathing?
+      Breathe in while you count 1, 2, 3, 4.
+      Breathe out while you count 1, 2, 3, 4, 5, 6.
+      You can do this 3 times.
+    choices: ["I did it", "Something else", "Stop for today"]
+  - id: name_the_feeling
+    text: |-
+      Let's pause the practice. You did nothing wrong.
+      Can you pick a word for how you feel right now?
+    choices: ["Tired", "Worried", "Angry", "Too loud or too much", "Something else"]
+  - id: sensory_break
+    text: |-
+      Let's pause the practice. You did nothing wrong.
+      You can take a short break. Look away from the screen, drink some water, or go somewhere quiet.
+      I will wait here. There is no rush.
+    choices: ["I am back", "Stop for today"]
+
+# Extra instructions appended to the companion prompt for Level 1 (tense).
+level1_directives:
+  - "The user may feel tense. Slow down."
+  - "Use 1 or 2 short sentences. Keep each sentence under 12 words."
+  - "Ask at most one question."
+  - "Offer two choices: keep going, or take a short break."
+  - "Do not give feedback on this turn."
+level1_choices: ["Keep going", "Take a short break"]
+
+# Instructions for the companion while the session is in crisis support mode
+# (after a crisis message, until the user chooses to go back to practice).
+crisis_support_directives:
+  - "Stay out of the role-play. Do not give feedback."
+  - "Reply in 1 to 3 short, kind sentences. Use plain, literal words."
+  - "Do not give advice about medicine, diagnosis or methods of harm."
+  - "Do not promise to keep secrets."
+  - "End with this exact sentence: {support_line}"

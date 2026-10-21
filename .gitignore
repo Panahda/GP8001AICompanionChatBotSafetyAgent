@@ -1,0 +1,34 @@
+# Whitelist: git ignores everything, then only our own source, config and small data
+# files are allowed. Libraries are NOT in the repo: install them with requirements.txt
+# (see README, Setup).
+*
+!*/
+!*.py
+!*.json
+!*.jsonl
+!*.yaml
+!*.yml
+!*.md
+!requirements*.txt
+!.gitignore
+!.gitkeep
+
+# ...but never these, even when the file type is allowed above
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.env
+*.env
+.streamlit/
+data/raw/
+data/interim/
+data/processed/
+data/review/
+models/*/
+reports/*
+!reports/.gitkeep
+runs/
+README_old.md
+.vscode/
+.idea/

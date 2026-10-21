@@ -1,0 +1,72 @@
+# Singapore helplines shown at Level 3. Hard-coded on purpose: the LLM never writes
+# phone numbers, so they cannot be made up. Re-check before every demo.
+verified_on: "2026-10-14"
+sources:
+  - https://www.moh.gov.sg/newsroom/national-mindline-1771-to-provide--round-the-clock-support-for-mental-health/
+  - https://msf.gov.sg/what-we-do/help-those-in-need/article/programmes/National-Anti-Violence-and-Sexual-Harassment-Helpline-NAVH
+  - https://events.psb-academy.edu.sg/student-resources/student-care/crisis-helplines-community-resources
+
+lines:
+  sos: "Samaritans of Singapore (SOS): call 1767, any time. WhatsApp: 9151 1767."
+  mindline: "national mindline 1771: call 1771, any time. WhatsApp: 6669 1771."
+  emergency_self: "If you might act on these thoughts now, call 995 or go to the nearest hospital emergency department."
+  emergency_other: "If the person is in danger now, call 995."
+  emergency_police: "If someone is in danger now, call 999 (police) or 995 (ambulance)."
+  navh: "National Anti-Violence and Sexual Harassment Helpline: call 1800 777 0000, any time."
+  police_self: "If you are in danger now, call 999 (police)."
+
+support_line: "You can call SOS at 1767 or mindline at 1771 any time."
+
+choices: ["Keep talking with you", "Stop for today", "I am safe now. Go back to practice"]
+
+# Template per crisis group. {lines.x} placeholders are filled from `lines` above.
+templates:
+  self: |-
+    I am going to pause our practice now.
+    What you wrote sounds serious. Your safety matters most.
+    I am an AI. I cannot help in an emergency. These people can help you now:
+    - {sos}
+    - {mindline}
+    - {emergency_self}
+    You can also tell a person you trust, like a family member, teacher or friend.
+    What would you like to do now?
+  others_at_risk: |-
+    I am going to pause our practice now.
+    You are worried about someone. It is important that you noticed.
+    I am an AI. These people can help you and the person you are worried about:
+    - {sos}
+    - {mindline}
+    - {emergency_other}
+    It is OK to tell a trusted adult or another person you trust.
+    What would you like to do now?
+  harm_others: |-
+    I am going to pause our practice now.
+    It sounds like you have strong feelings about hurting someone. Thank you for telling me.
+    I am an AI. Please talk to a real person now:
+    - {mindline}
+    - {sos}
+    - {emergency_police}
+    What would you like to do now?
+  unsafe_abuse: |-
+    I am going to pause our practice now.
+    It sounds like someone may be hurting you, or you may not be safe. That is not your fault.
+    I am an AI. These people can help:
+    - {navh}
+    - {police_self}
+    - {sos}
+    You can also tell a person you trust, like a teacher or school counsellor.
+    What would you like to do now?
+
+# Which template each crisis category uses.
+category_to_template:
+  cssrs_1_wish_dead: self
+  cssrs_2_active_thoughts: self
+  cssrs_3_method: self
+  cssrs_4_intent: self
+  cssrs_5_plan: self
+  cssrs_6_behaviour: self
+  nssi: self
+  unspecified: self
+  harm_others: harm_others
+  others_at_risk: others_at_risk
+  unsafe_abuse: unsafe_abuse
