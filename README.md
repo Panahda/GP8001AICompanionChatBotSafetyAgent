@@ -163,13 +163,18 @@ companion reply -> output guard (no scores, no method talk, no diagnosis, no "I 
 
 #### Outcomes Table (Proposal §4.3 Evaluation Metrics, `gemini/gemini-3.5-flash`)
 
-| Outcome | What We Tested (Proposal §4.3) | Target | Result |
+| Outcome | What We Tested (Proposal §4.3) | Target | Result (`full` vs. `rules+llm`) |
 |---|---|---|---|
-| **Safe** | Crisis recall on the 130-message safety test set (`data/test_set.jsonl`: 50 C-SSRS crisis, 50 safe, 30 tense/overwhelmed) | **≥ 95% crisis recall** | **100% (50/50, 95% CI 93%–100%)** in `full` mode (**86%** [43/50, CI 74%–93%] in `rules+llm` mode) |
-| **Fair** | False-crisis rate on autistic communication styles (blunt/literal, idioms, special interests) & tense-but-safe messages | **≤ 5% false-crisis rate** | **0.0% (0/32) on autistic styles** and **3.3% (1/30) on tense-safe** in `rules+llm` mode; **100% (6/6)** on terse-user baseline (`mt01`) & **100% (4/4)** on idiom small talk (`mt06`) |
-| **Understandable** | Plain, literal language (short sentences ≤ 15 words, no idioms/sarcasm) & team vs. LLM-judge agreement (Cohen's κ) | **100% plain-language pass rate** & **κ ≥ 0.70** | **100% pass rate** on `OutputGuard` plain-language & literalness checks across all 3 scenarios |
+| **Safe** | Crisis recall on the 130-message safety test set (`data/test_set.jsonl`: 50 C-SSRS crisis, 50 safe, 30 tense/overwhelmed) | **≥ 95% crisis recall** | **`full`: 100% (50/50, CI 93%–100%) — meets target**<br>**`rules+llm`: 86% (43/50, CI 74%–93%) — misses target** |
+| **Fair** | False-crisis rate on autistic communication styles (blunt/literal, idioms, special interests) & tense-but-safe messages | **≤ 5% false-crisis rate** | **`full`: 12% style / 20% tense-safe — misses target**<br>**`rules+llm`: 0% style (0/32) / 3% tense-safe (1/30) — meets target** |
+| **Understandable** | Plain, literal language (short sentences ≤ 15 words, no idioms/sarcasm) & team vs. LLM-judge agreement (Cohen's κ) | **100% plain-language pass rate** & **κ ≥ 0.70** | **100% pass rate** on `OutputGuard` plain-language & literalness checks; **Cohen's κ (team vs. LLM judge): not yet measured** |
 | **Low pressure** | Output guard check over every user-facing message confirming zero scores, grades, or right/wrong marks reach the user | **0% score leakage** | **0 scores shown (100% stripped/blocked)** across all **315 automated tests** |
 | **On track** | Multi-turn state tracking & difficult user simulation (anxious, overwhelmed, sarcastic, off-topic, crisis-hold) | **≥ 90% multi-turn checks passed** | **100% (45/45 checks passed across all 10 multi-turn test conversations)** |
+
+> **Key trade-off from the 5-mode ablation (Safe vs. Fair):** No single mode currently meets both the **Safe** ($\ge 95\%$) and **Fair** ($\le 5\%$) targets at the same time:
+> - **`full` (`rules -> classifier -> llm`)** meets the **Safe** target (**100% crisis recall**), but misses the **Fair** target (**12%** false alarms on autistic styles and **20%** on tense-but-safe messages) because the small seed-trained classifier over-flags crises with high confidence (`p_crisis >= crisis_hi`) and skips the LLM check.
+> - **`rules+llm`** meets the **Fair** target (**0%** false alarms on autistic styles, **3%** on tense-but-safe, **98%** crisis precision, **0.88** macro-F1), but misses the **Safe** target (**86% crisis recall**) because indirect crisis messages without an explicit keyword do not trigger the LLM when no classifier is active.
+> - **Why the ablation matters:** It isolates the exact bottleneck—combining the full 3,380-item synthetic training run with a rule that routes high-confidence classifier flags through the LLM whenever the rules layer only matched an idiom/safe cue resolves the trade-off.
 
 #### 5-Mode Ablation Table (`data/test_set.jsonl`, `n = 130`, `gemini/gemini-3.5-flash`)
 
@@ -485,13 +490,18 @@ companion 回复 -> 输出检查（不给分数、不提方法、不做诊断、
 
 #### Outcomes 评估结果表（对应 Proposal §4.3，`gemini/gemini-3.5-flash`）
 
-| 指标 (Outcome) | 测试内容 (Proposal §4.3) | 目标 (Target) | 结果 (Result) |
+| 指标 (Outcome) | 测试内容 (Proposal §4.3) | 目标 (Target) | 结果 (`full` vs. `rules+llm`) |
 |---|---|---|---|
-| **Safe（安全）** | 130 条安全测试集的危机召回率（50 条危机、50 条安全、30 条紧张/过载） | **≥ 95% 危机召回率** | `full` 模式 **100% (50/50, 95% CI 93%–100%)**；`rules+llm` 模式 **86% (43/50)** |
-| **Fair（公平）** | 自闭症沟通风格（直接、字面表达、习语）及紧张但安全消息的误报危机率 | **≤ 5% 误报危机率** | `rules+llm` 模式下**自闭症风格误报率 0.0% (0/32)**，**紧张但安全误报率 3.3% (1/30)**；简短回复基线测试 (`mt01`) **100% (6/6)** 通过 |
-| **Understandable（易懂）** | 简短直白语言（每句 ≤ 15 词、无习语/反讽）及人工与 LLM 评分一致性 (Cohen's κ) | **100% 简明语言通过率** & **κ ≥ 0.70** | 3 个场景下 `OutputGuard` 简明语言与字面表达检查 **100% 通过** |
+| **Safe（安全）** | 130 条安全测试集的危机召回率（50 条危机、50 条安全、30 条紧张/过载） | **≥ 95% 危机召回率** | **`full`：100% (50/50, CI 93%–100%) — 达标**<br>**`rules+llm`：86% (43/50, CI 74%–93%) — 未达标** |
+| **Fair（公平）** | 自闭症沟通风格（直接、字面表达、习语）及紧张但安全消息的误报危机率 | **≤ 5% 误报危机率** | **`full`：自闭症风格 12% / 紧张但安全 20% — 未达标**<br>**`rules+llm`：自闭症风格 0% (0/32) / 紧张但安全 3% (1/30) — 达标** |
+| **Understandable（易懂）** | 简短直白语言（每句 ≤ 15 词、无习语/反讽）及人工与 LLM 评分一致性 (Cohen's κ) | **100% 简明语言通过率** & **κ ≥ 0.70** | `OutputGuard` 简明语言与字面表达检查 **100% 通过**；**Cohen's κ（组员与 LLM 评分一致性）：尚未测量 (not yet measured)** |
 | **Low pressure（低压力）** | 输出检查确认用户界面绝不显示任何分数、等级或对错标记 | **0% 分数泄露** | **0 分数显示（100% 拦截/剥离）**，通过全部 **315 项自动化测试** |
 | **On track（保持正轨）** | 多轮状态追踪与困难用户模拟（紧张、过载、危机保持与恢复） | **≥ 90% 多轮检查通过** | **100%（10 段多轮对话共 45/45 项检查全部通过）** |
+
+> **消融实验揭示的核心权衡（Safe vs. Fair）：** 目前没有任何单一模式能同时满足 **Safe**（$\ge 95\%$）和 **Fair**（$\le 5\%$）两项指标：
+> - **`full`（`rules -> classifier -> llm`）** 达到了 **Safe** 目标（**100% 危机召回率**），但未达到 **Fair** 目标（自闭症风格误报率 **12%**、紧张但安全消息误报率 **20%**），因为仅用种子数据训练的分类器容易给出高置信度危机预测（`p_crisis >= crisis_hi`），从而跳过了 LLM 复核。
+> - **`rules+llm`** 达到了 **Fair** 目标（自闭症风格误报率 **0%**、紧张但安全消息误报率 **3%**，危机准确率 **98%**，Macro-F1 **0.88**），但未达到 **Safe** 目标（**86% 危机召回率**），因为不合关键词的间接危机表述在没有分类器触发时不会调用 LLM。
+> - **结论与改进方向：** 5 种模式的消融对比清楚定位了问题所在——完成 3,380 条合成数据的完整训练，并规定“当规则层仅识别出习语或无明显风险词时，分类器判定的高置信度危机仍需交由 LLM 复核”，即可兼顾召回率与低误报。
 
 ### 安装
 
