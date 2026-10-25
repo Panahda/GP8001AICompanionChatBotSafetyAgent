@@ -129,8 +129,10 @@ dd { margin: 0; }
       <div>
         <label>LLM check
           <select id="provider">
+            <option value="gemini">Gemini (Google Cloud / API)</option>
             <option value="lmstudio">LM Studio (this computer)</option>
             <option value="mock">mock (offline stand-in)</option>
+            <option value="openai">OpenAI</option>
           </select>
         </label>
         <label>Mode
@@ -235,6 +237,7 @@ const ACTIONS = {
   crisis_support: "Stay in support mode until the user says they are safe.",
 };
 let sid = null, busy = false, curScenario = null, realLifePrompt = "";
+const hintEl = $("hint");
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -433,8 +436,9 @@ async function newConversation() {
       openBubble.append(el("span", "tag", `Companion · ${role}`), j.opening_line);
       $("log").append(openBubble);
       $("context").value = j.opening_line;
-    } else {
-      $("log").append($("hint"));
+    } else if (hintEl) {
+      hintEl.hidden = false;
+      $("log").append(hintEl);
     }
 
     resetPanel();
@@ -447,7 +451,7 @@ async function send() {
   const text = $("input").value.trim();
   if (!text || busy) return;
   if (!sid) { addNote("No conversation yet. Click New conversation.", true); return; }
-  $("hint").hidden = true;
+  if (hintEl) hintEl.hidden = true;
   disableOldChoices();
   $("log").append(el("div", "msg user", text));
   $("input").value = "";

@@ -117,12 +117,15 @@ class GeminiProvider:
             raise RuntimeError(f"GeminiProvider is not ready: {err_msg}")
 
         try:
-            cfg = self.types.GenerateContentConfig(
+            cfg_kwargs = dict(
                 system_instruction=system,
                 response_mime_type="application/json",
                 temperature=temperature,
-                max_output_tokens=max_tokens,
+                max_output_tokens=max(max_tokens, 1024),
             )
+            if hasattr(self.types, "ThinkingConfig"):
+                cfg_kwargs["thinking_config"] = self.types.ThinkingConfig(thinking_budget=0)
+            cfg = self.types.GenerateContentConfig(**cfg_kwargs)
             resp = self.client.models.generate_content(model=self.model, contents=user, config=cfg)
             return _parse_json(resp.text)
         except Exception as e:

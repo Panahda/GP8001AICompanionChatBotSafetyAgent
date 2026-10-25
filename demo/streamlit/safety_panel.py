@@ -35,9 +35,12 @@ if str(ROOT) not in sys.path:
 
 from safety.agent import SafetyAgent  # noqa: E402
 from safety.companion import CompanionAgent  # noqa: E402
+from safety.env import load_env  # noqa: E402
 from safety.feedback import FeedbackAgent  # noqa: E402
 from safety.orchestrator import TurnResult, handle_turn  # noqa: E402
 from safety.scenarios import Scenario, get_scenario, list_scenarios  # noqa: E402
+
+load_env()
 
 LEVELS = {0: "0 · safe", 1: "1 · tense", 2: "2 · overwhelmed", 3: "3 · possible crisis"}
 ACTIONS = {
@@ -189,7 +192,13 @@ def render_safety_panel(
             with st.chat_message(role):
                 st.markdown(text)
 
-        msg = st.chat_input("Type as the user")
+        with st.form("chat_form", clear_on_submit=True):
+            f_col1, f_col2 = st.columns([5, 1])
+            user_input_box = f_col1.text_input("Type as the user", placeholder="Type your message and press Enter or Send...", label_visibility="collapsed")
+            send_clicked = f_col2.form_submit_button("Send", use_container_width=True)
+
+    chat_bar_msg = st.chat_input("Or type as the user here...")
+    msg = (user_input_box.strip() if send_clicked and user_input_box else None) or chat_bar_msg
 
     if msg:
         history = [
