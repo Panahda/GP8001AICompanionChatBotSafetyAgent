@@ -62,7 +62,7 @@ def test_load_env_nonexistent_file():
 
 
 def test_default_models_gemini():
-    assert DEFAULT_MODELS["gemini"] == "gemini-2.5-flash"
+    assert DEFAULT_MODELS["gemini"] == "gemini-3.5-flash"
 
 
 def test_gemini_provider_dual_key_support():
@@ -71,7 +71,7 @@ def test_gemini_provider_dual_key_support():
         with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key-gemini"}, clear=True):
             gp = GeminiProvider()
             assert gp.api_key == "test-key-gemini"
-            assert gp.model == "gemini-2.5-flash"
+            assert gp.model == "gemini-3.5-flash"
             assert mock_client.call_args[1].get("api_key") == "test-key-gemini"
 
         # Test GOOGLE_API_KEY fallback

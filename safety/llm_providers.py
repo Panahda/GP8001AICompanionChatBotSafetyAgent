@@ -23,7 +23,7 @@ load_env()
 
 DEFAULT_MODELS = {
     "openai": "gpt-5-mini",        # check https://platform.openai.com/docs/models
-    "gemini": "gemini-2.5-flash",  # check https://ai.google.dev/gemini-api/docs/models
+    "gemini": "gemini-3.5-flash",  # check https://ai.google.dev/gemini-api/docs/models
 }
 
 

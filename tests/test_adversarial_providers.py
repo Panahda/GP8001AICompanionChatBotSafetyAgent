@@ -248,7 +248,7 @@ def test_safety_agent_from_config_with_null_timeout():
             "mode": "full",
             "llm": {
                 "provider": "gemini",
-                "model": "gemini-2.5-flash",
+                "model": "gemini-3.5-flash",
                 "timeout_s": None,  # Explicitly null
             },
             "fail_safe": True,

@@ -8,7 +8,7 @@ classifier:
 
 llm:
   provider: gemini     # openai | gemini | lmstudio | mock   (keys: GEMINI_API_KEY / GOOGLE_API_KEY)
-  model: gemini-2.5-flash         # null = provider default; for lmstudio = the model id shown in LM Studio
+  model: gemini-3.5-flash         # null = provider default; for lmstudio = the model id shown in LM Studio
   timeout_s: 10        # lmstudio uses at least 60 (local models are slower)
   base_url: null       # lmstudio only; null = http://localhost:1234/v1
 
