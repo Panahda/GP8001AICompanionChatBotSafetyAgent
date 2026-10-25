@@ -18,6 +18,7 @@ import time
 import urllib.request
 import uuid
 import webbrowser
+from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -28,10 +29,14 @@ sys.path.insert(0, str(ROOT))
 import yaml  # noqa: E402
 
 from safety.agent import MODES, SafetyAgent  # noqa: E402
+from safety.companion import CompanionAgent  # noqa: E402
+from safety.feedback import FeedbackAgent  # noqa: E402
+from safety.orchestrator import handle_turn  # noqa: E402
+from safety.scenarios import get_scenario, list_scenarios  # noqa: E402
 
 PAGE = Path(__file__).parent / "web" / "index.html"
 PROVIDERS = ("lmstudio", "mock", "openai", "gemini")
-CONTINUE_BUTTONS = {"Go back to practice", "Keep going", "I did it", "I am back"}
+CONTINUE_BUTTONS = {"Go back to practice", "Keep going", "I did it", "I am back", "Keep talking"}
 MAX_SESSIONS = 50
 ALLOWED_HOSTS = {"localhost", "127.0.0.1"}
 
@@ -72,6 +77,8 @@ class Demo:
         self.provider, self.mode = provider, mode
         self.lock = threading.Lock()
         self.agents: dict[tuple[str, str], SafetyAgent] = {}
+        self.companion_agents: dict[tuple[str, str], CompanionAgent] = {}
+        self.feedback_agents: dict[tuple[str, str], FeedbackAgent] = {}
         self.sessions: dict[str, dict] = {}
 
     def agent(self, provider: str | None = None, mode: str | None = None) -> SafetyAgent:
@@ -82,6 +89,22 @@ class Demo:
             self.agents[key] = SafetyAgent.from_config(ROOT / "config.yaml", provider=key[0], mode=key[1])
         return self.agents[key]
 
+    def companion(self, provider: str | None = None, mode: str | None = None) -> CompanionAgent:
+        key = (provider or self.provider, mode or self.mode)
+        if key not in self.companion_agents:
+            sa = self.agent(key[0], key[1])
+            llm_prov = sa.llm.provider if sa.llm else None
+            self.companion_agents[key] = CompanionAgent(provider=llm_prov, safety_agent=sa)
+        return self.companion_agents[key]
+
+    def feedback(self, provider: str | None = None, mode: str | None = None) -> FeedbackAgent:
+        key = (provider or self.provider, mode or self.mode)
+        if key not in self.feedback_agents:
+            sa = self.agent(key[0], key[1])
+            llm_prov = sa.llm.provider if sa.llm else None
+            self.feedback_agents[key] = FeedbackAgent(provider=llm_prov)
+        return self.feedback_agents[key]
+
     def conv(self, body: dict) -> dict:
         sid = body.get("session_id")
         if sid not in self.sessions:
@@ -89,14 +112,49 @@ class Demo:
         return self.sessions[sid]
 
     # ------------------------------------------------------------------ API routes
+    def scenarios(self, b: dict | None = None) -> dict:
+        return {"scenarios": [s.to_dict() for s in list_scenarios()]}
+
     def new(self, b: dict) -> dict:
-        agent = self.agent(b.get("provider"), b.get("mode"))
+        provider = b.get("provider") or self.provider
+        mode = b.get("mode") or self.mode
+        agent = self.agent(provider, mode)
         sid = uuid.uuid4().hex
+
+        sc_id = b.get("scenario") or "hawker_centre"
+        try:
+            sc = get_scenario(sc_id)
+        except KeyError:
+            sc = get_scenario("hawker_centre")
+
         s = agent.new_session(age_group=b.get("age_group", "teen"), carer_alert_consent=bool(b.get("carer_consent")))
-        self.sessions[sid] = {"agent": agent, "state": s, "last": None}
+        self.sessions[sid] = {
+            "agent": agent,
+            "state": s,
+            "scenario": sc,
+            "history": [{"role": "companion", "text": sc.opening_line}],
+            "last": None,
+            "last_companion_line": sc.opening_line,
+            "provider": provider,
+            "mode": mode,
+        }
         while len(self.sessions) > MAX_SESSIONS:
             self.sessions.pop(next(iter(self.sessions)))
-        return {"session_id": sid, "status": status(agent)}
+
+        example_replies = [
+            {"text": ex.text, "explanation": ex.explanation} if hasattr(ex, "text") else ex
+            for ex in sc.example_replies
+        ]
+        return {
+            "session_id": sid,
+            "status": status(agent),
+            "scenario": sc.to_dict(),
+            "opening_line": sc.opening_line,
+            "user_goal": sc.user_goal,
+            "setting": sc.setting,
+            "example_replies": example_replies,
+            "real_life_prompt": sc.real_life_prompt,
+        }
 
     def check(self, b: dict) -> dict:
         c = self.conv(b)
@@ -104,39 +162,91 @@ class Demo:
         if not text:
             raise ValueError("Empty message.")
         s, agent = c["state"], c["agent"]
-        s.age_group = b.get("age_group", s.age_group)
-        s.carer_alert_consent = bool(b.get("carer_consent"))
+        if "age_group" in b:
+            s.age_group = b.get("age_group", s.age_group)
+        if "carer_consent" in b:
+            s.carer_alert_consent = bool(b.get("carer_consent"))
+
+        sc_id = b.get("scenario") or getattr(c.get("scenario"), "id", None) or "hawker_centre"
+        try:
+            sc = get_scenario(sc_id)
+        except KeyError:
+            sc = c.get("scenario") or get_scenario("hawker_centre")
+        c["scenario"] = sc
+
+        provider = c.get("provider", self.provider)
+        mode = c.get("mode", self.mode)
+        comp_agent = self.companion(provider, mode)
+        fb_agent = self.feedback(provider, mode)
+
         t0 = time.perf_counter()
-        d = agent.check_user_message(s, text, context=b.get("context") or None, scenario=b.get("scenario") or None)
-        c["last"] = d
-        return {**d.to_dict(), "crisis_hold": s.crisis_hold, "ms": round((time.perf_counter() - t0) * 1000)}
+        last_comp_line = b.get("context") or c.get("last_companion_line") or sc.opening_line
+
+        turn = handle_turn(
+            agent,
+            session=s,
+            user_text=text,
+            last_companion_line=last_comp_line,
+            scenario=sc,
+            companion_agent=comp_agent,
+            feedback_agent=fb_agent,
+            history=c.get("history", []),
+        )
+        c["last"] = turn.decision
+        c["last_companion_line"] = turn.reply
+        c.setdefault("history", []).append({"role": "user", "text": text})
+        c["history"].append({"role": "companion", "text": turn.reply})
+
+        elapsed_ms = round((time.perf_counter() - t0) * 1000)
+        d_dict = turn.decision.to_dict()
+        return {
+            **d_dict,
+            "reply": turn.reply,
+            "feedback": turn.feedback,
+            "buttons": list(turn.buttons),
+            "decision": d_dict,
+            "scenario_id": sc.id,
+            "end_of_session_prompt": sc.real_life_prompt,
+            "crisis_hold": s.crisis_hold,
+            "ms": elapsed_ms,
+        }
 
     def button(self, b: dict) -> dict:
         c = self.conv(b)
-        s, agent, label = c["state"], c["agent"], b.get("label", "")
+        s, agent = c["state"], c["agent"]
+        label = b.get("label") or b.get("action") or ""
         if label.startswith("I am safe now"):
             agent.release_crisis_hold(s)
             effect = "Crisis hold released. The app goes back to practice."
-        elif label in CONTINUE_BUTTONS:
+        elif label in CONTINUE_BUTTONS or label in ("Keep talking", "I did it", "Something else"):
             agent.user_chose_continue(s)
             effect = "The app goes back to practice."
         elif label == "Stop for today":
             effect = "The app would end the session here."
         else:
             effect = "Noted. The app stays at the current level."
-        return {"effect": effect, "session_level": int(s.level), "crisis_hold": s.crisis_hold}
+        return {"effect": effect, "session_level": int(s.level), "crisis_hold": s.crisis_hold, "action": label}
 
     def reply(self, b: dict) -> dict:
         c = self.sessions.get(b.get("session_id"))
         agent = c["agent"] if c else self.agent()
         d = c["last"] if c else None
+        candidate = b.get("reply") if "reply" in b else b.get("text", "")
         # Fixed replies (helplines, playbook) are never checked, so test against a normal turn then.
-        g = agent.guard.check(b.get("reply", ""), d if d is not None and d.fixed_reply is None else None)
+        g = agent.guard.check(candidate, d if d is not None and d.fixed_reply is None else None)
         return {"ok": g.ok, "action": g.action, "text": g.text, "violations": g.violations,
                 "warnings": g.warnings, "hint": g.regenerate_hint}
 
 
-ROUTES = {"/api/new": Demo.new, "/api/check": Demo.check, "/api/button": Demo.button, "/api/reply": Demo.reply}
+ROUTES = {
+    "/api/new": Demo.new,
+    "/api/check": Demo.check,
+    "/api/button": Demo.button,
+    "/api/action": Demo.button,
+    "/api/reply": Demo.reply,
+    "/api/guard_test": Demo.reply,
+    "/api/scenarios": Demo.scenarios,
+}
 
 
 def make_handler(demo: Demo):
@@ -168,6 +278,8 @@ def make_handler(demo: Demo):
                 sid = (parse_qs(url.query).get("session_id") or [None])[0]
                 c = demo.sessions.get(sid)
                 return self._send(200, status(c["agent"] if c else demo.agent()))
+            if url.path == "/api/scenarios":
+                return self._send(200, demo.scenarios())
             return self._send(404, {"error": "not found"})
 
         def do_POST(self):

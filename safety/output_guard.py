@@ -17,7 +17,7 @@ from .schema import Action, GuardResult, SafetyDecision
 
 SCORE = [
     r"\b\d+(\.\d+)?\s*/\s*(10|5|100)\b",
-    r"\b\d{1,3}\s*(%|percent)\b",
+    r"\b\d{1,3}\s*(%|percent)(?!\w)",
     r"\b(score|scored|scoring|grade|graded|rating)\b",
     r"\b\d+ (marks|points)\b",
     r"\bincorrect\b",

@@ -84,10 +84,26 @@ dd { margin: 0; }
 #replyBox { width: 100%; height: 70px; resize: vertical; }
 .guard { margin-top: 8px; font-size: 14px; }
 .guard pre { white-space: pre-wrap; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin: 6px 0; font: inherit; }
+.disclaimer-banner { background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 13.5px; line-height: 1.4; }
+.disclaimer-banner strong { font-weight: 650; }
+.scenario-card { margin-bottom: 12px; padding: 12px 14px; }
+.scenario-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.goal-box { background: var(--soft); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 4px; font-size: 13.5px; }
+.practice-card { margin-bottom: 12px; padding: 12px 14px; background: #eaf4ed; border-color: #b2d8be; color: #1e4620; }
+@media (prefers-color-scheme: dark) {
+  .practice-card { background: #16291b; border-color: #2b5534; color: #b7e3be; }
+}
+.small-btn { font-size: 12px; padding: 3px 8px; border-radius: 4px; }
+.msg.feedback { align-self: flex-start; background: var(--soft); border: 1px dashed var(--l0); border-radius: 10px; margin-top: -4px; max-width: 82%; }
+.msg.feedback .tag { color: var(--l0); font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <div class="disclaimer-banner" role="note">
+    <strong>Notice:</strong> CompanionAI is a non-clinical AI conversation practice tool, not a human or therapist. This is an educational practice demo — please use fictional/made-up messages only.
+  </div>
+
   <header>
     <h1>CompanionAI safety check</h1>
     <span class="status" id="status">Connecting…</span>
@@ -126,6 +142,34 @@ dd { margin: 0; }
         <span class="small">Changing these starts a new conversation.</span>
       </div>
     </details>
+  </div>
+
+  <div class="card scenario-card" id="scenarioCard">
+    <div class="scenario-top">
+      <div>
+        <span class="chip lv0" id="scenarioBadge">Hawker Centre</span>
+        <h2 id="scenarioTitle" style="display:inline-block; font-size:16px; margin:0 0 0 8px; color:var(--ink); font-weight:650;">Ordering at a Hawker Centre</h2>
+      </div>
+      <button id="endPracticeBtn" class="small-btn">End Practice &amp; View Real-Life Tip</button>
+    </div>
+    <p class="small" id="scenarioSetting" style="margin:6px 0 8px"></p>
+    <div class="goal-box" id="scenarioGoalBox">
+      <strong>Communication Goal:</strong> <span id="scenarioGoal"></span>
+    </div>
+    <details id="examplesDetails" style="margin-top:8px">
+      <summary class="small">Suggested Example Replies (Ideas to try)</summary>
+      <ul id="examplesList" class="small" style="margin:4px 0 0; padding-left:18px;"></ul>
+    </details>
+  </div>
+
+  <div class="card practice-card" id="practiceCard" hidden>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <h3 style="margin:0 0 6px; font-size:15px; font-weight:650;">🌟 Real-Life Practice Recommendation</h3>
+        <p id="practicePromptText" style="margin:0 0 8px; font-size:14px;"></p>
+      </div>
+      <button id="closePracticeBtn" class="small-btn">Close</button>
+    </div>
   </div>
 
   <div class="grid">
@@ -190,7 +234,7 @@ const ACTIONS = {
   crisis_pause: "Pause and show the Singapore helplines.",
   crisis_support: "Stay in support mode until the user says they are safe.",
 };
-let sid = null, busy = false;
+let sid = null, busy = false, curScenario = null, realLifePrompt = "";
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -245,7 +289,13 @@ function setLevel(level, hold) {
 function botBubble(d) {
   const b = el("div", "msg bot lv" + d.session_level);
   if (d.fixed_reply) {
-    b.append(el("span", "tag", "Fixed reply from the safety agent (not written by the LLM)"), d.fixed_reply);
+    const tagText = d.session_level === 3 ? "Fixed Singapore Helpline (1767, 1771, NAVH · Crisis Hold Active)" :
+                    d.session_level === 2 ? "Fixed Self-Regulation Playbook Prompt (Role-play Paused)" :
+                    "Fixed Safety Reply";
+    b.append(el("span", "tag", tagText), d.fixed_reply);
+  } else if (d.reply) {
+    const tagText = d.session_level === 1 ? "Companion (Slowing down as instructed)" : "Companion";
+    b.append(el("span", "tag", tagText), d.reply);
   } else {
     b.append(el("span", "tag", "The companion would reply, following these instructions:"));
     const ul = el("ul");
@@ -253,14 +303,27 @@ function botBubble(d) {
     b.append(ul);
   }
   $("log").append(b);
-  if (d.choices.length) {
+
+  // Render Coach Feedback bubble on calm turns
+  if (d.feedback) {
+    const fb = el("div", "msg feedback");
+    fb.append(el("span", "tag", "💡 Coach suggestion (optional rubric advice)"), d.feedback);
+    $("log").append(fb);
+  }
+
+  const buttons = (d.buttons && d.buttons.length) ? d.buttons : (d.choices && d.choices.length ? d.choices : []);
+  if (buttons.length) {
     const row = el("div", "choices");
-    d.choices.forEach(label => {
+    buttons.forEach(label => {
       const btn = el("button", null, label);
       btn.onclick = () => press(label, row);
       row.append(btn);
     });
     $("log").append(row);
+  }
+
+  if (d.reply) {
+    $("context").value = d.reply;
   }
   scrollLog();
 }
@@ -340,11 +403,40 @@ async function newConversation() {
   setBusy(true, "Starting");
   try {
     const s = settings();
-    const j = await api("/api/new", { provider: s.provider, mode: s.mode, age_group: s.age_group, carer_consent: s.carer_consent });
+    const j = await api("/api/new", { provider: s.provider, mode: s.mode, age_group: s.age_group,
+                                      carer_consent: s.carer_consent, scenario: s.scenario });
     sid = j.session_id;
     showStatus(j.status);
-    $("log").replaceChildren($("hint"));
-    $("hint").hidden = false;
+    curScenario = j.scenario;
+    realLifePrompt = j.real_life_prompt || (j.scenario ? j.scenario.real_life_prompt : "");
+
+    // Update scenario card
+    $("scenarioTitle").textContent = j.scenario && j.scenario.title ? j.scenario.title : $("scenario").options[$("scenario").selectedIndex].text;
+    $("scenarioBadge").textContent = $("scenarioTitle").textContent.split(" ")[0];
+    $("scenarioSetting").textContent = j.setting || (j.scenario ? j.scenario.setting : "");
+    $("scenarioGoal").textContent = j.user_goal || (j.scenario ? j.scenario.user_goal : "");
+
+    const exList = $("examplesList");
+    exList.replaceChildren();
+    (j.example_replies || []).forEach(ex => {
+      const li = el("li", null, `"${ex.text}" — ${ex.explanation}`);
+      exList.append(li);
+    });
+
+    $("practiceCard").hidden = true;
+    $("log").replaceChildren();
+
+    // Render companion opening line
+    if (j.opening_line) {
+      const openBubble = el("div", "msg bot lv0");
+      const role = (j.scenario && j.scenario.companion_role) ? j.scenario.companion_role : "Companion";
+      openBubble.append(el("span", "tag", `Companion · ${role}`), j.opening_line);
+      $("log").append(openBubble);
+      $("context").value = j.opening_line;
+    } else {
+      $("log").append($("hint"));
+    }
+
     resetPanel();
   } catch (e) { addNote(e.message, true); }
   setBusy(false);
@@ -365,6 +457,9 @@ async function send() {
     const s = settings();
     const d = await api("/api/check", { session_id: sid, text, context: $("context").value.trim(),
       scenario: s.scenario, age_group: s.age_group, carer_consent: s.carer_consent });
+    if (d.end_of_session_prompt) {
+      realLifePrompt = d.end_of_session_prompt;
+    }
     botBubble(d);
     renderDecision(d);
   } catch (e) { addNote(e.message, true); }
@@ -377,7 +472,7 @@ async function press(label, row) {
   row.querySelectorAll("button").forEach(b => b.disabled = true);
   $("log").append(el("div", "msg user press", `[button] ${label}`));
   try {
-    const j = await api("/api/button", { session_id: sid, label });
+    const j = await api("/api/action", { session_id: sid, label });
     addNote(j.effect);
     setLevel(j.session_level, j.crisis_hold);
   } catch (e) { addNote(e.message, true); }
@@ -388,7 +483,7 @@ async function checkReply() {
   out.replaceChildren(el("span", "small", "Checking…"));
   try {
     const sent = $("replyBox").value;
-    const g = await api("/api/reply", { session_id: sid, reply: sent });
+    const g = await api("/api/guard_test", { session_id: sid, reply: sent });
     const changed = g.text.trim() !== sent.trim();
     const verdict = { show: changed ? "Shown after removing the flagged sentences." : "Shown as is.",
       show_fixed: "Shown after removing the flagged sentences.",
@@ -408,9 +503,17 @@ $("sendBtn").onclick = send;
 $("input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 $("newBtn").onclick = newConversation;
 $("replyBtn").onclick = checkReply;
+$("scenario").onchange = newConversation;
 $("age").onchange = () => { $("consent").disabled = $("age").value !== "adult"; if ($("consent").disabled) $("consent").checked = false; };
 $("provider").onchange = newConversation;
 $("mode").onchange = newConversation;
+
+$("endPracticeBtn").onclick = () => {
+  $("practicePromptText").textContent = realLifePrompt || "Next time you visit a hawker stall, office break room, or meet a peer, try practicing your opening line and one preference!";
+  $("practiceCard").hidden = false;
+  scrollLog();
+};
+$("closePracticeBtn").onclick = () => { $("practiceCard").hidden = true; };
 
 async function refreshStatus() {
   try { showStatus(await api("/api/status" + (sid ? "?session_id=" + sid : ""))); }

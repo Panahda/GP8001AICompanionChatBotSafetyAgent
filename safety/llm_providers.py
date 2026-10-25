@@ -16,9 +16,14 @@ import os
 import re
 from typing import Optional, Protocol
 
+from .env import load_env
+
+# Automatically load environment variables from .env on import
+load_env()
+
 DEFAULT_MODELS = {
     "openai": "gpt-5-mini",        # check https://platform.openai.com/docs/models
-    "gemini": "gemini-3.6-flash",  # check https://ai.google.dev/gemini-api/docs/models
+    "gemini": "gemini-2.5-flash",  # check https://ai.google.dev/gemini-api/docs/models
 }
 
 
@@ -44,11 +49,21 @@ def _parse_json(text: str) -> dict:
 class OpenAIProvider:
     name = "openai"
 
-    def __init__(self, model: Optional[str] = None, timeout_s: float = 20.0):
+    def __init__(self, model: Optional[str] = None, timeout_s: float = 20.0, api_key: Optional[str] = None,
+                 base_url: Optional[str] = None):
         from openai import OpenAI
 
         self.model = model or DEFAULT_MODELS["openai"]
-        self.client = OpenAI(timeout=timeout_s, max_retries=1)
+        kwargs = dict(timeout=timeout_s, max_retries=1)
+        key = api_key or os.environ.get("OPENAI_API_KEY")
+        if key:
+            kwargs["api_key"] = key
+        if base_url:
+            kwargs["base_url"] = base_url
+        try:
+            self.client = OpenAI(**kwargs)
+        except Exception as e:
+            raise RuntimeError(f"OpenAI client initialization failed: {e}") from e
 
     def complete_json(self, system, user, temperature=0.0, max_tokens=400, schema=None):
         kwargs = dict(
@@ -58,34 +73,58 @@ class OpenAIProvider:
             max_completion_tokens=max_tokens,
         )
         try:
-            resp = self.client.chat.completions.create(temperature=temperature, **kwargs)
-        except Exception as e:  # some reasoning models only accept the default temperature
-            if "temperature" not in str(e):
-                raise
-            resp = self.client.chat.completions.create(**kwargs)
-        return _parse_json(resp.choices[0].message.content)
+            try:
+                resp = self.client.chat.completions.create(temperature=temperature, **kwargs)
+            except Exception as e:  # some reasoning models only accept the default temperature
+                if "temperature" not in str(e):
+                    raise
+                resp = self.client.chat.completions.create(**kwargs)
+            return _parse_json(resp.choices[0].message.content)
+        except Exception as e:
+            raise RuntimeError(f"OpenAI API request failed: {e}") from e
 
 
 class GeminiProvider:
     name = "gemini"
 
-    def __init__(self, model: Optional[str] = None, timeout_s: float = 20.0):
-        from google import genai
-        from google.genai import types
-
+    def __init__(self, model: Optional[str] = None, timeout_s: float = 20.0, api_key: Optional[str] = None):
         self.model = model or DEFAULT_MODELS["gemini"]
-        self.types = types
-        self.client = genai.Client(http_options=types.HttpOptions(timeout=int(timeout_s * 1000)))
+        self.api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        self.client = None
+        self.types = None
+        self._init_error = None
 
-    def complete_json(self, system, user, temperature=0.0, max_tokens=400, schema=None):
-        cfg = self.types.GenerateContentConfig(
-            system_instruction=system,
-            response_mime_type="application/json",
-            temperature=temperature,
-            max_output_tokens=max_tokens,
-        )
-        resp = self.client.models.generate_content(model=self.model, contents=user, config=cfg)
-        return _parse_json(resp.text)
+        try:
+            from google import genai
+            from google.genai import types
+
+            self.types = types
+            client_kwargs = {
+                "http_options": types.HttpOptions(timeout=int(timeout_s * 1000))
+            }
+            if self.api_key:
+                client_kwargs["api_key"] = self.api_key
+            self.client = genai.Client(**client_kwargs)
+        except Exception as e:
+            self._init_error = str(e)
+
+    def complete_json(self, system: str, user: str, temperature: float = 0.0, max_tokens: int = 400,
+                      schema: Optional[dict] = None) -> dict:
+        if self.client is None or self.types is None:
+            err_msg = self._init_error or "Gemini client not initialized (missing API key or google-genai library)"
+            raise RuntimeError(f"GeminiProvider is not ready: {err_msg}")
+
+        try:
+            cfg = self.types.GenerateContentConfig(
+                system_instruction=system,
+                response_mime_type="application/json",
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+            )
+            resp = self.client.models.generate_content(model=self.model, contents=user, config=cfg)
+            return _parse_json(resp.text)
+        except Exception as e:
+            raise RuntimeError(f"Gemini API request failed: {e}") from e
 
 
 class LMStudioProvider:
@@ -105,20 +144,26 @@ class LMStudioProvider:
         self.model = model or os.environ.get("LMSTUDIO_MODEL") or self._first_loaded_model()
 
     def _first_loaded_model(self) -> str:
-        models = [m.id for m in self.client.models.list().data]
-        if not models:
-            raise RuntimeError("LM Studio server is running but no model is loaded")
-        return models[0]
+        try:
+            models = [m.id for m in self.client.models.list().data]
+            if not models:
+                raise RuntimeError("LM Studio server is running but no model is loaded")
+            return models[0]
+        except Exception as e:
+            raise RuntimeError(f"LM Studio server is unreachable: {e}") from e
 
     def complete_json(self, system, user, temperature=0.0, max_tokens=400, schema=None):
         fmt = {"type": "json_schema",
                "json_schema": {"name": "answer", "strict": True, "schema": schema or {"type": "object"}}}
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            response_format=fmt, temperature=temperature, max_tokens=max_tokens,
-        )
-        return _parse_json(resp.choices[0].message.content)
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+                response_format=fmt, temperature=temperature, max_tokens=max_tokens,
+            )
+            return _parse_json(resp.choices[0].message.content)
+        except Exception as e:
+            raise RuntimeError(f"LM Studio API request failed: {e}") from e
 
 
 class MockProvider:
@@ -155,12 +200,15 @@ class MockProvider:
 
 
 def get_provider(name: str, model: Optional[str] = None, timeout_s: float = 20.0,
-                 base_url: Optional[str] = None) -> LLMProvider:
+                 base_url: Optional[str] = None, api_key: Optional[str] = None) -> LLMProvider:
     name = (name or "mock").lower()
     if name == "openai":
-        return OpenAIProvider(model, timeout_s)
+        return OpenAIProvider(model, timeout_s, api_key=api_key, base_url=base_url)
     if name == "gemini":
-        return GeminiProvider(model, timeout_s)
+        prov = GeminiProvider(model, timeout_s, api_key=api_key)
+        if prov.client is None:
+            raise RuntimeError(f"Gemini provider could not be initialized: {prov._init_error}")
+        return prov
     if name == "lmstudio":
         return LMStudioProvider(model, max(timeout_s, 60.0), base_url)
     if name == "mock":

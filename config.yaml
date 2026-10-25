@@ -7,8 +7,8 @@ classifier:
   fallback_dir: runs/full/models/baseline   # TF-IDF + logistic regression, used if the above is missing
 
 llm:
-  provider: lmstudio     # openai | gemini | lmstudio | mock   (keys: OPENAI_API_KEY / GEMINI_API_KEY)
-  model: qwen/qwen3.8-27b         # null = provider default; for lmstudio = the model id shown in LM Studio
+  provider: gemini     # openai | gemini | lmstudio | mock   (keys: GEMINI_API_KEY / GOOGLE_API_KEY)
+  model: gemini-2.5-flash         # null = provider default; for lmstudio = the model id shown in LM Studio
   timeout_s: 10        # lmstudio uses at least 60 (local models are slower)
   base_url: null       # lmstudio only; null = http://localhost:1234/v1
 
