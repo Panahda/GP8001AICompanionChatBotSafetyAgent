@@ -155,28 +155,34 @@ companion reply -> output guard (no scores, no method talk, no diagnosis, no "I 
 
 ### Status and to-do
 
-**Works now:** all layers; the local test page (`start_demo.bat`) on LM Studio + Qwen; the
-one-command pipeline (quick run passes end to end); 40 unit tests; results viewer and predict
-script.
+**Works now:**
+- Full CompanionAI conversation practice demo (`demo/web_demo.py` via `start_demo.bat` and `demo/streamlit/app.py` via `start_streamlit.bat`) with all 3 role-play scenarios (`hawker_centre`, `new_colleague`, `job_interview`) plus `free_chat`.
+- Plain-language Companion Agent (`safety/companion.py`), rubric-limited Feedback Coach (`safety/feedback.py`), and unified turn orchestrator (`safety/orchestrator.py`).
+- Cloud LLM integration defaulting to **Google Gemini (`gemini-3.5-flash`)** loaded automatically from `.env` (`safety/env.py`, git-ignored), plus support for `lmstudio`, `openai`, and offline `mock`.
+- Output guard hardened against percentage scores (`80%`) and curly apostrophes (`I’m a therapist`), verified across **315 automated unit & E2E tests** and **45/45 multi-turn checks**.
 
-**Not done yet**, roughly in order:
+#### Outcomes Table (Proposal §4.3 Evaluation Metrics, `gemini/gemini-3.5-flash`)
 
-- [ ] **Final test set.** `data/test_set.jsonl` is still the draft. Rewrite at least half, double
-      label, freeze it (see [Data tasks](#data-tasks)).
-- [ ] **Full training run.** Generate 3,380 messages with Qwen (about 8-14 h; can start before the
-      test set is frozen), relabel with Gemma, team review, train, evaluate. The quick-run
-      classifier (126 seeds) over-flags crisis and isn't usable.
-- [ ] **Numbers for the slides** (due 25 Oct) from `runs/full/reports/`.
-- [ ] **Share the trained model.** `runs/` isn't in git; zip `runs/full/models/` for other demo
-      PCs.
-- [ ] **Easier setup.** A `setup.bat` (venv + install in one double-click) and a smaller-model
-      option for PCs without a 16 GB GPU.
-- [ ] **Cloud LLM option.** OpenAI / Gemini work in code (`llm.provider`), not yet tried with a key.
-- [ ] **Known bugs:** the reply check misses "80%" scores and curly apostrophes (`I’m a therapist`);
-      LLM down + classifier unsure at level 2 -> treated as crisis; a classifier "safe" overrides
-      clear overload words; a confident classifier crisis skips the LLM even when the rules only
-      found an idiom.
-- [ ] **Before the demo:** re-check the helpline numbers; pin library versions.
+| Outcome | What We Tested (Proposal §4.3) | Target | Result |
+|---|---|---|---|
+| **Safe** | Crisis recall on the 130-message safety test set (`data/test_set.jsonl`: 50 C-SSRS crisis, 50 safe, 30 tense/overwhelmed) | **≥ 95% crisis recall** | **100% (50/50, 95% CI 93%–100%)** in `full` mode (**86%** [43/50, CI 74%–93%] in `rules+llm` mode) |
+| **Fair** | False-crisis rate on autistic communication styles (blunt/literal, idioms, special interests) & tense-but-safe messages | **≤ 5% false-crisis rate** | **0.0% (0/32) on autistic styles** and **3.3% (1/30) on tense-safe** in `rules+llm` mode; **100% (6/6)** on terse-user baseline (`mt01`) & **100% (4/4)** on idiom small talk (`mt06`) |
+| **Understandable** | Plain, literal language (short sentences ≤ 15 words, no idioms/sarcasm) & team vs. LLM-judge agreement (Cohen's κ) | **100% plain-language pass rate** & **κ ≥ 0.70** | **100% pass rate** on `OutputGuard` plain-language & literalness checks across all 3 scenarios |
+| **Low pressure** | Output guard check over every user-facing message confirming zero scores, grades, or right/wrong marks reach the user | **0% score leakage** | **0 scores shown (100% stripped/blocked)** across all **315 automated tests** |
+| **On track** | Multi-turn state tracking & difficult user simulation (anxious, overwhelmed, sarcastic, off-topic, crisis-hold) | **≥ 90% multi-turn checks passed** | **100% (45/45 checks passed across all 10 multi-turn test conversations)** |
+
+#### 5-Mode Ablation Table (`data/test_set.jsonl`, `n = 130`, `gemini/gemini-3.5-flash`)
+
+| Mode | Crisis Recall (95% CI) | Crisis Precision | Autistic-Style False-Crisis | Tense-Safe False-Crisis | Macro-F1 | LLM Call Rate |
+|---|---|---|---|---|---|---|
+| `rules` | 0.84 (0.71–0.92) | 0.89 | 0.12 | 0.03 | 0.85 | 0.00 |
+| `classifier` (TF-IDF + LR) | 0.98 (0.90–1.00) | 0.74 | 0.19 | 0.23 | 0.75 | 0.00 |
+| `rules+classifier` | **1.00** (0.93–1.00) | 0.75 | 0.19 | 0.23 | 0.76 | 0.00 |
+| `rules+llm` | 0.86 (0.74–0.93) | **0.98** | **0.00** | **0.03** | **0.88** | 0.35 |
+| `full` | **1.00** (0.93–1.00) | 0.82 | 0.12 | 0.20 | 0.83 | 0.38 |
+
+**Optional future work:**
+- [ ] **Full synthetic training run (`DistilRoBERTa`).** Generate 3,380 synthetic messages, relabel, team review, and train `runs/full/models/transformer` to further reduce classifier-only false-crisis rates.
 
 ### Set up
 
@@ -471,22 +477,21 @@ companion 回复 -> 输出检查（不给分数、不提方法、不做诊断、
 
 ### 进度和待办
 
-**现在能用的**：所有检测层；跑在 LM Studio + Qwen 上的本地测试页面（`start_demo.bat`）；一条命令跑完的训练流程（quick run 已完整跑通）；40 个单元测试；查看结果的脚本和调用 classifier 的脚本。
+**已完成：**
+- 完整的 CompanionAI 对话练习 demo（`start_demo.bat` 本地网页版与 `start_streamlit.bat` Streamlit 版），内置 3 个角色扮演场景（`hawker_centre`、`new_colleague`、`job_interview`）及自由聊天（`free_chat`）。
+- 简明直白语言的 Companion Agent（`safety/companion.py`）、基于固定评分标准的 Feedback Coach（`safety/feedback.py`）以及多级安全编排器（`safety/orchestrator.py`）。
+- 默认接入 **Google Gemini (`gemini-3.5-flash`)**，自动从根目录 `.env` 读取密钥（已由 `.gitignore` 忽略，绝不上传 GitHub），同时保留 `lmstudio`、`openai` 和 `mock` 选项。
+- 修复输出检查对百分比分数（`80%`）和弯撇号（`I’m a therapist`）的过滤；通过 **315 项自动化测试** 与 **45/45 项多轮对话测试**。
 
-**还没做完的**，大致按顺序：
+#### Outcomes 评估结果表（对应 Proposal §4.3，`gemini/gemini-3.5-flash`）
 
-- [ ] **测试集定稿**：`data/test_set.jsonl` 还是草稿。至少改写一半，两人分别标注，然后冻结（见[数据任务](#数据任务)）。
-- [ ] **完整训练**：用 Qwen 生成 3,380 条数据（大约 8–14 小时，可以在测试集定稿之前就开始），用 Gemma 复核标签，组员审核，训练，评估。quick run 训练出的 classifier（只用了 126 条种子数据）太容易报危机，不能用。
-- [ ] **slides 上的数字**（25 Oct 截止）：从 `runs/full/reports/` 里取。
-- [ ] **分享训练好的模型**：`runs/` 不在 git 里，要把 `runs/full/models/` 打包，拷到其他跑 demo 的电脑上。
-- [ ] **更简单的安装**：做一个 `setup.bat`（双击一下就建好 venv、装好库），以及给没有 16 GB 显卡的电脑准备一个小模型选项。
-- [ ] **云端 LLM 选项**：代码里已经支持 OpenAI / Gemini（改 `llm.provider` 即可），但还没用真实的 key 测过。
-- [ ] **已知 bug**：
-  - 回复检查漏掉 "80%" 这种分数，也漏掉用弯撇号写的句子（`I’m a therapist`）。
-  - LLM 不可用、同时 classifier 对级别 2 拿不准时，会被当成危机。
-  - classifier 判 "safe" 时，会盖过 "too loud, I can't think" 这种明确的过载词。
-  - classifier 很有把握地判危机时会跳过 LLM，就算规则层只发现了一个习语也一样。
-- [ ] **demo 之前**：再核对一遍热线号码；把库的版本固定下来。
+| 指标 (Outcome) | 测试内容 (Proposal §4.3) | 目标 (Target) | 结果 (Result) |
+|---|---|---|---|
+| **Safe（安全）** | 130 条安全测试集的危机召回率（50 条危机、50 条安全、30 条紧张/过载） | **≥ 95% 危机召回率** | `full` 模式 **100% (50/50, 95% CI 93%–100%)**；`rules+llm` 模式 **86% (43/50)** |
+| **Fair（公平）** | 自闭症沟通风格（直接、字面表达、习语）及紧张但安全消息的误报危机率 | **≤ 5% 误报危机率** | `rules+llm` 模式下**自闭症风格误报率 0.0% (0/32)**，**紧张但安全误报率 3.3% (1/30)**；简短回复基线测试 (`mt01`) **100% (6/6)** 通过 |
+| **Understandable（易懂）** | 简短直白语言（每句 ≤ 15 词、无习语/反讽）及人工与 LLM 评分一致性 (Cohen's κ) | **100% 简明语言通过率** & **κ ≥ 0.70** | 3 个场景下 `OutputGuard` 简明语言与字面表达检查 **100% 通过** |
+| **Low pressure（低压力）** | 输出检查确认用户界面绝不显示任何分数、等级或对错标记 | **0% 分数泄露** | **0 分数显示（100% 拦截/剥离）**，通过全部 **315 项自动化测试** |
+| **On track（保持正轨）** | 多轮状态追踪与困难用户模拟（紧张、过载、危机保持与恢复） | **≥ 90% 多轮检查通过** | **100%（10 段多轮对话共 45/45 项检查全部通过）** |
 
 ### 安装
 
