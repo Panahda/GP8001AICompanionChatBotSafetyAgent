@@ -104,6 +104,8 @@ class GeminiProvider:
             }
             if self.api_key:
                 client_kwargs["api_key"] = self.api_key
+                if self.api_key.startswith("AQ.") or os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("1", "true", "yes"):
+                    client_kwargs["vertexai"] = True
             self.client = genai.Client(**client_kwargs)
         except Exception as e:
             self._init_error = str(e)
